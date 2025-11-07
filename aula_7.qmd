@@ -1,0 +1,187 @@
+---
+title: "aula_7"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+    toc-depth: 5
+    toc-expand: 1
+    toc-location: left
+    toc-title: Tópicos
+    number-sections: false
+    df-print: paged
+    smooth-scroll: true
+editor: visual
+theme: 
+  light: flatly
+  dark: darkly
+---
+
+```{=html}
+<style>
+body {
+text-align: justify;
+font-size: 20px}
+blockquote {
+  background-color: #FAEFA6;
+  padding: 10px;
+  font-size: 14.5px
+}
+</style>
+```
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.height = 10, fig.width = 12)
+```
+
+# **Pacotes**
+
+```{r}
+library(tidyverse)
+
+library(readxl)
+
+library(report)
+
+library(reshape2)
+```
+
+# **Dados**
+
+## Importando
+
+```{r}
+correlacao <- readxl::read_xlsx("Atividade_corr.xlsx",
+                                sheet = 2)
+```
+## Visualizando
+
+```{r}
+correlacao
+```
+
+## Checando
+
+```{r}
+correlacao %>% 
+  dplyr::glimpse()
+
+correlacao %>% 
+  report::report()
+```
+
+## Tratando
+
+```{r}
+colnames(correlacao) <- paste0("PC1-", 1:3)
+
+correlacao
+```
+
+# **Modelando**
+
+## Testando a noramlidade 
+
+```{r}
+normality_checking <- function(x){
+  
+  stringr::str_glue("teste de normalidade para {x}") %>% message()
+  
+  correlacao[[x]] %>% shapiro.test() %>% print()
+  
+}
+
+purrr::walk(correlacao %>% names, normality_checking)
+```
+
+## Teste de correlação de Pearson
+
+```{r}
+correlation_pairwise <- function(x){
+  
+  var1 <- x[1]
+  
+  var2 <- x[2]
+  
+  stringr::str_glue("correlação: {var1} x {var2}") %>% message()
+  
+  cor_testando <- cor.test(correlacao[[var1]], correlacao[[var2]], method = "pearson")
+  
+  cor_testando %>% print()
+  
+  nome_var <- stringr::str_replace_all(paste0("correlacao_", var1, "_", var2), " ", "_")
+  
+  assign(nome_var, cor_testando, envir = .GlobalEnv)
+  
+}
+
+combos <- correlacao %>% 
+  names() %>% 
+  utils::combn(2, simplify = FALSE)
+
+combos
+
+purrr::walk(combos, correlation_pairwise)
+```
+
+## T-Crítico
+
+```{r}
+stats::qt(p = 0.05, df = 18, lower.tail = FALSE)
+```
+
+## Gráfico
+
+### Estatísticas
+
+```{r}
+estatisticas_cor <- tibble::tibble(label = c(stringr::str_glue("t<sub>({`correlacao_PC1-1_PC1-2`$parameter})</sub> = {`correlacao_PC1-1_PC1-2`$statistic %>% round(3)}, r = {`correlacao_PC1-1_PC1-2`$estimate %>% round(3)}, p < 0.01"),
+                                             stringr::str_glue("t<sub>({`correlacao_PC1-1_PC1-3`$parameter})</sub> = {`correlacao_PC1-1_PC1-3`$statistic %>% round(3)}, r = {`correlacao_PC1-1_PC1-3`$estimate %>% round(3)}, p = {`correlacao_PC1-1_PC1-3`$p.value %>% round(3)}")),
+                                   `PC1-1` = 0,
+                                   Scores = 2,
+                                   `PC Y` = c("PC1-2", "PC1-3"))
+
+estatisticas_cor
+```
+
+### Graficando
+
+```{r, warning=FALSE}
+theme_set(theme(axis.text = element_text(color = "black", size = 20, family = "Times New Roman"),
+                axis.title = element_text(color = "black", size = 20, family = "Times New Roman"),
+                panel.grid.major  = element_line(colour = "gray90", linewidth = 1),
+                legend.text = element_text(color = "black", size = 20, family = "Times New Roman"),
+                legend.title = element_text(color = "black", size = 20, family = "Times New Roman"),
+                legend.position = "bottom",
+                panel.border = element_rect(colour = 1, fill = "transparent", size = 1),
+                panel.background = element_rect(colour = NA, fill = "white"),
+                strip.background = element_rect(color = "black", fill = "gray80"),
+                strip.text = element_text(color = "black", size = 25, family = "Times New Roman")))
+
+correlacao %>% 
+  tidyr::pivot_longer(cols = dplyr::contains(c("2", "3")),
+                      names_to = "PC Y",
+                      values_to = "Scores") %>% 
+  ggplot(aes(`PC1-1`, Scores, fill = `PC Y`, color = `PC Y`)) +
+  geom_point(shape = 21, color = "black", size = 5, show.legend = FALSE) +
+  geom_smooth(data = . %>% dplyr::filter(`PC Y` == "PC1-2"), 
+              se = FALSE,
+              method = "lm",
+              show.legend = FALSE) +
+  ggtext::geom_richtext(data = estatisticas_cor,
+                        aes(`PC1-1`, Scores, label = label),
+                        size = 7.5,
+                        color = "black",
+                        fill = NA,
+                        label.color = NA,
+                        family = "Times New Roman") +
+  scale_fill_manual(values = c("gold", "cyan3")) +
+  scale_color_manual(values = "gold4") +
+  facet_wrap(~ `PC Y`)
+
+ggsave("grafico_correlacao.png", height = 10, width = 12)
+```
+
+
+
+
+

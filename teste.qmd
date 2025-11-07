@@ -1,0 +1,150 @@
+---
+title: "Untitled" 
+format: docx
+editor: visual
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, include = FALSE)
+```
+
+# Pacotes
+
+```{r}
+library(tidyverse)
+
+library(performance)
+```
+
+# Dados
+
+## Importando
+
+```{r}
+pinguins <- palmerpenguins::penguins %>% 
+  tidyr::drop_na()
+```
+
+## Checando
+
+```{r}
+pinguins %>% dplyr::glimpse()
+
+pinguins %>% report::report()
+```
+
+# Modelando
+
+## Criando o modelo
+
+```{r}
+anova_fatorial <- stats::aov(bill_length_mm ~ species * sex, data = pinguins) %>% stats::anova()
+```
+
+## Cehcando o modelo
+
+```{r}
+anova_fatorial %>% report::report()
+
+anova_fatorial
+```
+
+## F-Crítico
+
+```{r}
+f_critico_especies <- stats::qf(p = 0.05, df1 = 2, df2 = 327, lower.tail = FALSE)
+
+f_critico_especies
+
+f_critico_sexo <- stats::qf(p = 0.05, df1 = 1, df2 = 327, lower.tail = FALSE)
+
+f_critico_sexo
+```
+
+## Estatisticas
+
+### F-Calculado
+
+```{r}
+f_calculado_especies <- anova_fatorial$`F value`[1]
+
+f_calculado_especies
+
+f_calculado_sexo <- anova_fatorial$`F value`[2]
+
+f_calculado_sexo
+
+f_calculado_interacao <- anova_fatorial$`F value`[3]
+
+f_calculado_interacao
+```
+
+### Graus de liberdade
+
+```{r}
+df1_especies <- anova_fatorial$Df[1]
+
+df1_sexo <- anova_fatorial$Df[2]
+
+df1_interacao <- anova_fatorial$Df[3]
+
+df2 <- anova_fatorial$Df[4]
+```
+
+### P
+
+```{r}
+p_especies <- if(anova_fatorial$`Pr(>F)`[1] < 0.01){
+  
+  print("< 0.01")
+  
+  } else{
+  
+  print(anova_fatorial$`Pr(>F)`[1])
+    
+    }
+
+p_sexo <- if(anova_fatorial$`Pr(>F)`[2] < 0.01){
+  
+  print("< 0.01")
+  
+  } else{
+  
+  print(anova_fatorial$`Pr(>F)`[2])
+    
+    }
+
+p_interacao <- if(anova_fatorial$`Pr(>F)`[3] < 0.01){
+  
+  print("< 0.01")
+  
+  } else{
+  
+  print(paste0("= ", anova_fatorial$`Pr(>F)`[3] %>% round(3)))
+    
+    }
+```
+
+# **Material e Métodos**
+
+Foi performada uma ANOVA Fatoral para testar se as variáveis de sexo e das espécies conseguiam predizer o comprimento do bico.
+
+# **Resultados**
+
+Foi observado um efeito da espécie no comprimento do bico (F-Crítico~(`r df1_especies`, `r df2`, α = 0.05)~ = `r f_critico_especies %>% round(3)`, F~(`r df1_especies`, `r df2`)~ = `r f_calculado_especies %>% round(3)`, p `r p_especies`), assim como pelo sexo ((F-Crítico~(`r df1_sexo`, `r df2`, α = 0.05)~ = `r f_critico_sexo %>% round(3)`, F~(`r df1_sexo`, `r df2`)~ = `r f_calculado_sexo %>% round(3)`, p `r p_sexo`)), mas não para a interação (F-Crítico~(`r df1_interacao`, `r df2`, α = 0.05)~ = `r f_critico_sexo %>% round(3)`, F~(`r df1_interacao`, `r df2`)~ = `r f_calculado_interacao %>% round(3)`, p `r p_interacao`).
+
+```{r}
+#| include: true
+#| echo: false
+library(gt)
+
+knitr::opts_chunk$set("ft.shadow" = FALSE)
+
+tible <- tibble(`F` = c(anova_fatorial$`F value`[1], anova_fatorial$`F value`[2]),
+       p = c(anova_fatorial$`Pr(>F)`[1], anova_fatorial$`Pr(>F)`[2])) 
+
+gt::gt(tible) %>% 
+  gt::cols_align(align = "center") %>% 
+  gt::
+```
+

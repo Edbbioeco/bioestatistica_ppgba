@@ -1,0 +1,305 @@
+---
+title: "Thiago_ANOVAs"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+    toc-depth: 5
+    toc-expand: 1
+    toc-location: left
+    toc-title: Tópicos
+    number-sections: false
+    df-print: paged
+    smooth-scroll: true
+editor: visual
+theme: 
+  light: flatly
+  dark: darkly
+---
+
+```{=html}
+<style>
+body {
+text-align: justify;
+font-size: 20px}
+blockquote {
+  background-color: #FAEFA6;
+  padding: 10px;
+  font-size: 14.5px
+}
+</style>
+```
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.height = 10, fig.width = 12)
+```
+
+# **Pacotes**
+
+```{r}
+library(tidyverse)
+
+library(readxl)
+
+library(report)
+
+library(performance)
+
+library(lsmeans)
+
+library(ggtext)
+
+library(flextable)
+```
+
+# **Dados**
+
+## Importando
+
+### ANOVA Fatorial
+
+```{r}
+anova_fatorial <- readxl::read_xlsx("Atividade_Fat_e_RM.xlsx",
+                                    sheet = 3)
+```
+
+### ANOVA de Medidas Repetidas
+
+```{r}
+anova_med_rep <- readxl::read_xlsx("Atividade_Fat_e_RM.xlsx",
+                                    sheet = 4)
+```
+
+## Checando
+
+### ANOVA Fatorial
+
+```{r}
+anova_fatorial
+
+anova_fatorial %>% dplyr::glimpse()
+
+anova_fatorial %>% report::report()
+```
+
+### ANOVA de Medidas Repetidas
+
+```{r}
+anova_med_rep
+
+anova_med_rep %>% dplyr::glimpse()
+
+anova_med_rep %>% report::report()
+```
+
+## Tratando
+
+### ANOVA Fatorial
+
+```{r}
+anova_fatorial_trat <- anova_fatorial %>% 
+  dplyr::mutate(Presença = dplyr::case_match(TRAT1,
+                                             "A" ~ "Sim",
+                                             .default = "Não") %>% 
+                  forcats::fct_relevel(c("Sim", "Não")),
+                Área = dplyr::case_match(TRAT2,
+                                         "C" ~ "Tratamento 1",
+                                             .default = "Tratamento 2") %>% 
+                  forcats::fct_relevel(c("Tratamento 1", "Tratamento 2")),
+                Biomassa = RESP) %>% 
+  dplyr::select(4:6)
+
+anova_fatorial_trat
+```
+### ANOVA de Medidas Repetidas
+
+```{r}
+anova_med_rep_trat <- anova_med_rep %>% 
+  tidyr::pivot_longer(cols = dplyr::contains("TIME"),
+                      names_to = "Área",
+                      values_to = "Biomassa") %>% 
+  dplyr::mutate(Área = dplyr::case_match(Área,
+                                         "TIME 1" ~ "Tratamento 1",
+                                         "TIME 2" ~ "Tratamento 2",
+                                         "TIME 3" ~ "Tratamento 3") %>% 
+                  forcats::fct_relevel(c("Tratamento 1", "Tratamento 2", "Tratamento 3")))
+
+anova_med_rep_trat
+```
+
+# **ANOVA Fatorial**
+
+## Modelando
+
+```{r}
+modelo_anova_fat <- aov(Biomassa ~ Presença * Área, data = anova_fatorial_trat)
+```
+
+## Pressupostos do modelo
+
+```{r}
+modelo_anova_fat %>% 
+  performance::check_model()
+```
+
+## Avaliando o modelo
+
+```{r}
+modelo_anova_fat_results <- modelo_anova_fat %>% stats::anova()
+
+modelo_anova_fat_results
+```
+
+## F-Crítico
+
+```{r}
+f_critico_fatorial <- stats::qf(p = 0.05, df1 = 1, df2 = 16, lower.tail = FALSE)
+
+f_critico_fatorial
+```
+## Tabela Flextable
+
+```{r}
+anova_fat_flex <- tibble::tibble(Preditor = c("Presença", "Área", "Presença:Área"), 
+                                 `F` = modelo_anova_fat_results$`F value`[-4] %>% round(2),
+                                 `Graus de Liberdade` = paste0(modelo_anova_fat_results$Df[-4], ", ", modelo_anova_fat_results$Df[4]), 
+                                 p = modelo_anova_fat_results$`Pr(>F)`[-4] %>% round(2)) %>% 
+  flextable::flextable() %>%
+  flextable::width(width = 1.5) %>%
+  flextable::align(align = "center", part = "all") %>%
+  flextable::bold(part = "header") %>%
+  flextable::font(fontname = "Times New Roman", part = "all")  %>%
+  flextable::fontsize(size = 12, part = "all")
+
+anova_fat_flex
+
+anova_fat_flex %>% 
+  flextable::save_as_docx(path = "tabela_anova_fatorial_thiago.docx")
+```
+
+## Gráfico
+
+```{r, warning=FALSE}
+theme_set(theme(axis.text = element_text(color = "black", size = 20, family = "Times New Roman"),
+                axis.title = element_text(color = "black", size = 20, family = "Times New Roman"),
+                panel.grid.major  = element_line(colour = "gray90", linewidth = 1),
+                legend.text = element_text(color = "black", size = 20, family = "Times New Roman"),
+                legend.title = element_text(color = "black", size = 20, family = "Times New Roman"),
+                legend.position = "bottom",
+                panel.border = element_rect(colour = 1, fill = "transparent", size = 1),
+                panel.background = element_rect(colour = NA, fill = "white")))
+
+anova_fatorial_trat %>% 
+  ggplot(aes(Presença, Biomassa, fill = Área)) +
+  geom_boxplot(position = position_dodge(0.5),
+               color = "black", 
+               outlier.size = 2.5, 
+               width = 0.25) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.5),
+             size = 5,
+             shape = 21,
+             color = "black") +
+  scale_fill_manual(values = c("gold3", "cyan4")) +
+  guides(fill = guide_legend(title.position = "top",
+                              title.hjust = 0.5))
+
+
+ggsave("anova_fatorial_thiago.png", height = 10, width = 12)
+```
+
+# **ANOVA de Medidas Repetidas**
+
+## Modelando
+
+```{r}
+modelo_anova_med_rep <- aov(Biomassa ~ Área + Error(Medidas), data = anova_med_rep_trat)
+```
+
+## Avaliando o modelo
+
+```{r}
+modelo_anova_med_rep_results <- modelo_anova_med_rep %>% 
+  summary()
+
+modelo_anova_med_rep_results
+```
+
+## F-Crítico
+
+```{r}
+f_critico_med_rep <- stats::qf(p = 0.05, df1 = 2, df2 = 20, lower.tail = FALSE)
+
+f_critico_med_rep
+```
+
+## Post-Hoc
+
+### Calculando
+
+```{r}
+anova_med_rep_posthoc <- lsmeans::lsmeans(modelo_anova_med_rep, "Área") %>% 
+  pairs(adjust = "tukey")
+
+anova_med_rep_posthoc
+```
+
+### Tabela Flextable
+
+```{r}
+anova_med_rep_flextable <- anova_med_rep_posthoc %>% 
+  data.frame() %>% 
+  dplyr::rename("Comparação" = contrast,
+                "Coeficiente Estimado" = estimate,
+                "Erro Padrão" = SE,
+                "Graus de Liberdade" = df,
+                "t" = t.ratio,
+                "p" = p.value) %>% 
+  dplyr::mutate(p = dplyr::case_when(p < 0.01 ~ "< 0.01"),
+                `Coeficiente Estimado` = `Coeficiente Estimado` %>% round(2),
+                `Erro Padrão` = `Erro Padrão` %>% round(2),
+                t = t %>% round(2)) %>% 
+  tidyr::unite(col = `Coeficiente Estimado ± Erro Padrão`, 
+               sep = " ± ", 
+               `Coeficiente Estimado`:`Erro Padrão`) %>% 
+  flextable::flextable() %>%
+  flextable::width(width = 2) %>%
+  flextable::align(align = "center", part = "all") %>%
+  flextable::bold(part = "header") %>%
+  flextable::font(fontname = "Times New Roman", part = "all")  %>%
+  flextable::fontsize(size = 12, part = "all")
+
+anova_med_rep_flextable
+
+anova_med_rep_flextable %>% 
+  flextable::save_as_docx(path = "tabela_medidas_repetidas_thiago.docx")
+```
+
+## Gráfico
+
+```{r, warning=FALSE}
+estatistica_med_rep <- stringr::str_glue("F-Critico<sub>(2, 20, α = 0.05)</sub> = {f_critico_med_rep %>% round(2)}, F<sub>(2, 20)</sub> = 106.2, p < 0.01")
+
+anova_med_rep_trat %>% 
+  ggplot(aes(Medidas %>% factor(), Biomassa, fill = Área)) +
+  geom_boxplot(position = position_dodge(0.75),
+               color = "black", 
+               width = 0.5,
+               outlier.size = 2.5) +
+  geom_jitter(position = position_jitterdodge(dodge.width = 0.75), 
+             shape = 21, 
+             color = "black", 
+             size = 5) +
+  ggtext::geom_richtext(aes(1.5, 65, label = estatistica_med_rep),
+                        size = 7.5, 
+                        color = "black",
+                        label.color = NA,
+                        fill = NA,
+                        family = "Times New Roman") +
+  scale_fill_manual(values = c("#9B73A6", "#E6A180", "#46CD57")) +
+  labs(x = "Tipo de Equipamento") +
+  guides(fill = guide_legend(title.position = "top",
+                             title.hjust = 0.5))
+
+
+ggsave("anova_med_rep_thiago.png", height = 10, width = 12)
+```
+

@@ -1,0 +1,356 @@
+---
+title: "Thiago teste t"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+    toc-depth: 5
+    toc-expand: 1
+    toc-location: left
+    toc-title: Tópicos
+    number-sections: false
+    df-print: paged
+    smooth-scroll: true
+editor: visual
+theme: 
+  light: flatly
+  dark: darkly
+---
+
+```{=html}
+<style>
+body {
+text-align: justify;
+font-size: 20px}
+blockquote {
+  background-color: #FAEFA6;
+  padding: 10px;
+  font-size: 14.5px
+}
+</style>
+```
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.height = 10, fig.width = 12)
+```
+
+# **Pacotes**
+
+```{r}
+library(tidyverse)
+
+library(readxl)
+
+library(report)
+
+library(flextable)
+```
+
+# **Dados**
+
+## Importando
+
+```{r}
+dados_t <- readxl::read_xlsx("Dados att.xlsx")
+
+dados_t
+```
+
+## Checando
+
+```{r}
+dados_t %>% 
+  report::report()
+
+dados_t %>% 
+  dplyr::glimpse()
+```
+
+## Tratando
+
+```{r}
+dados_t_trat <- dados_t %>% 
+  dplyr::select(1:2) %>% 
+  pivot_longer(cols = dplyr::everything(),
+               names_to = "Tratamento",
+               values_to = "Biomassa")
+
+dados_t_trat
+```
+
+
+# **Teste T de 1 amostra**
+
+## Pressupostos
+
+```{r}
+normalidade <- function(x){
+  
+  stringr::str_glue("Normalidade para a variável {x}") %>% 
+    message()
+  
+  dados_t[[x]] %>% 
+    shapiro.test() %>% 
+    print()
+  
+  gg <- dados_t[x] %>% 
+    ggplot(aes(.[[x]])) +
+    geom_density() +
+    labs(title = x)
+  
+  print(gg)
+  
+}
+
+purrr::walk(dados_t %>% names, normalidade)
+```
+
+## Modelando
+
+```{r}
+teste_t_1a <- function(x){
+  
+  teste_t_fun <- t.test(dados_t[[x]], mu = 24)
+  
+  assign(paste0("teste_t_1a_", x), teste_t_fun, envir = globalenv())
+  
+  stringr::str_glue("Teste T de uma amostra para a variável {x}") %>% message()
+  
+  teste_t_fun %>% 
+    print()
+  
+}
+
+
+purrr::walk(dados_t[, 1:2] %>% names, teste_t_1a)
+```
+
+## T-Crítico
+
+```{r}
+t_critico <- stats::qt(p = 0.05, df = 9, lower.tail = FALSE)
+
+t_critico
+```
+
+## Flextable
+
+### Criando as tabelas
+
+#### Tratamento 1
+
+```{r}
+tabela_1a_c1 <- tibble::tibble(Tratamento = "Tratamento .",
+                               `x̅` = `teste_t_1a_Tratamento 1`$estimate %>% as.numeric(),
+                               t = `teste_t_1a_Tratamento 1`$statistic %>% as.numeric() %>% round(2),
+                               `graus de liberdade` = `teste_t_1a_Tratamento 1`$parameter %>% as.numeric(),
+                               p = if(`teste_t_1a_Tratamento 1`$p.value < 0.01) { print("< 0.01") } else { print(`teste_t_1a_Tratamento 1`$p.value %>% round(3) %>% as.character()) },
+                               `Intervalo de Confiança 95%` = paste0(`teste_t_1a_Tratamento 1`$conf.int[1] %>% round(2),
+                                                                      " – ",
+                                                                      `teste_t_1a_Tratamento 1`$conf.int[2] %>% round(2)))
+
+tabela_1a_c1
+```
+
+#### Tratamento 2
+
+```{r}
+tabela_1a_c2 <- tibble::tibble(Tratamento = "Tratameno 2",
+                               `x̅` = `teste_t_1a_Tratamento 2`$estimate %>% as.numeric(),
+                               t = `teste_t_1a_Tratamento 2`$statistic %>% as.numeric() %>% round(2),
+                               `graus de liberdade` = `teste_t_1a_Tratamento 2`$parameter %>% as.numeric(),
+                               p = if(`teste_t_1a_Tratamento 2`$p.value < 0.01) { print("< 0.01") } else { print(`teste_t_1a_Tratamento 2`$p.value %>% round(2) %>% as.character()) },
+                               `Intervalo de Confiança 95%` = paste0(`teste_t_1a_Tratamento 2`$conf.int[1] %>% round(2),
+                                                                      " – ",
+                                                                      `teste_t_1a_Tratamento 2`$conf.int[2] %>% round(2)))
+
+tabela_1a_c2
+```
+
+#### Unindo e criando a tabela 
+
+```{r}
+tabelas_1a <- ls(pattern = "^tabela_1a_")
+
+tabelas_unidas_1a <- mget(tabelas_1a) %>%
+  dplyr::bind_rows()
+
+tabelas_unidas_1a
+```
+
+### Criando e Salavando a tabela
+
+```{r}
+tabelas_unidas_1a_flex <- tabelas_unidas_1a %>%
+  flextable::flextable() %>%
+  flextable::width(width = 1.15) %>%
+  flextable::align(align = "center", part = "all") %>%
+  flextable::bold(part = "header") %>%
+  flextable::font(fontname = "Times New Roman", part = "all")  %>%
+  flextable::fontsize(size = 12, part = "all") 
+
+tabelas_unidas_1a_flex
+
+tabelas_unidas_1a_flex %>%
+  flextable::save_as_docx(path = "tabela_1a_atividade_2_thiago.docx")
+```
+
+# **Teste T para duas amostras **
+
+## Pressupostos
+
+### Normalidade dos resíduos por Shapiro-Wilki 
+
+```{r}
+lm(Biomassa ~ Tratamento, data = dados_t_trat) %>%
+  residuals() %>%
+  shapiro.test()
+```
+
+### Homogenidade de variância dos resíduos por Bartlett 
+
+```{r}
+bartlett.test(Biomassa ~ Tratamento, data = dados_t_trat)
+
+stats::qchisq(p = 0.05, d = 1, lower.tail = FALSE)
+```
+
+
+## Modelando 
+
+### Teste t para variâncias heterogêneas 
+
+#### Modelo
+
+```{r}
+teste_t_var_dif <- t.test(Biomassa ~ Tratamento, 
+                          data = dados_t_trat, 
+                          var.equal = FALSE)
+
+teste_t_var_dif
+```
+
+#### t-crítico 
+
+```{r}
+stats::qt(p = 0.05, df = 13.188, lower.tail = FALSE)
+```
+
+### Teste t para variâncias homogêneas 
+
+#### Modelo 
+
+```{r}
+teste_t_var_eq <- t.test(Biomassa ~ Tratamento, 
+                         data = dados_t_trat,
+                         var.equal = TRUE)
+
+teste_t_var_eq
+```
+
+#### t-crítico 
+
+```{r}
+stats::qt(p = 0.05, df = 18, lower.tail = FALSE)
+```
+
+## Tabela 
+
+### Estatísticas 
+
+```{r}
+estatisticas_2a_vardif <- tibble::tibble(Variância = "Heterogênea",
+                                         `t-crítico` = "1.77",
+                                         t = teste_t_var_dif$statistic %>% as.numeric() %>% round(3),
+                                         `graus de liberdade` = teste_t_var_dif$parameter %>% round(3),
+                                         p = teste_t_var_dif$p.value %>% round(3),
+                                         `Intervalo de Confiança 95%` = paste0(teste_t_var_dif$conf.int[1] %>% round(2),
+                                                                               " – ",
+                                                                               teste_t_var_dif$conf.int[2] %>% round(2)))
+
+estatisticas_2a_vardif
+
+estatisticas_2a_vareq <- tibble::tibble(Variância = "Homogênea",
+                                        `t-crítico` = "1.73",
+                                         t = teste_t_var_eq$statistic %>% as.numeric() %>% round(3),
+                                         `graus de liberdade` = teste_t_var_eq$parameter %>% as.numeric() %>% round(0),
+                                         p = teste_t_var_eq$p.value %>% round(3),
+                                         `Intervalo de Confiança 95%` = paste0(teste_t_var_eq$conf.int[1] %>% round(2),
+                                                                               " – ",
+                                                                               teste_t_var_eq$conf.int[2] %>% round(2)))
+
+estatisticas_2a_vareq
+```
+
+### Unindo as tabela 
+
+```{r}
+tabelas_2a <- ls(pattern = "a_var")
+
+tabelas_unidas_2a <- mget(tabelas_2a) %>%
+  dplyr::bind_rows()
+
+tabelas_unidas_2a
+```
+
+### Criando e salvando o flextable 
+
+```{r}
+tabelas_unidas_2a_flex <- tabelas_unidas_2a %>%
+  flextable::flextable() %>%
+  flextable::width(width = 1.15) %>%
+  flextable::align(align = "center", part = "all") %>%
+  flextable::bold(part = "header") %>%
+  flextable::font(fontname = "Times New Roman", part = "all")  %>%
+  flextable::fontsize(size = 12, part = "all") 
+
+tabelas_unidas_2a_flex
+
+tabelas_unidas_2a_flex %>%
+  flextable::save_as_docx(path = "tabela_2a_atividade_2_thiago.docx")
+```
+
+## Gráfico 
+
+```{r}
+label = "Variância heterogênea: \n\nt <sub>(11.522)</sub> = 1.755, p =0.106 \n\nt-crítico = 1.77 \n\n   \n\n   \n\nVariância homogênea: \n\nt <sub>(18)</sub> = 1.755, p = 0.096 \n\nt-crítico = 1.73"
+
+pontos_medias_2a <- tibble::tibble(Tratamento = c("Tratamento 1",
+                                                  "Tratamento 2"),
+                                   Biomassa = c(teste_t_var_eq$estimate[1], teste_t_var_eq$estimate[2]))
+
+pontos_medias_2a
+
+dados_t_trat %>%
+  ggplot(aes(Tratamento, Biomassa, fill = Tratamento)) +
+  geom_boxplot(color = "black", show.legend = FALSE, width = 0.25) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.1), color = "black", shape = 21, size = 3, show.legend = FALSE) +
+  geom_point(data = pontos_medias_2a,
+             aes(Tratamento, Biomassa),
+             color = "black",
+             size = 5,
+             show.legend = FALSE) +
+  ggforce::geom_link(aes(x = 1, xend = 2, y = teste_t_var_eq$estimate[1], yend = teste_t_var_eq$estimate[2]),
+                     color = "black",
+                     linetype = "dashed") +
+  ggtext::geom_richtext(aes(x = 1.75, y = 35, label = label, fontface = 2),
+                        color = "black",
+                        size = 6,
+                        fill = NA,
+                        label.color = NA,
+                        family = "Times New Roman") +
+  scale_fill_manual(values = c("#9B73A6", "#E6A180")) +
+  scale_y_continuous(breaks = seq(8, 40, 5), limits = c(8, 40)) +
+  labs(x = NULL,
+       y = "Biomassa") +
+  theme(axis.text = element_text(color = "black", size = 20, family = "Times New Roman"),
+        axis.title = element_text(color = "black", size = 20, family = "Times New Roman"),
+        panel.grid.major  = element_line(colour = "gray90", linewidth = 1),
+        legend.text = element_text(color = "black", size = 20, family = "Times New Roman"),
+        legend.title = element_text(color = "black", size = 20, family = "Times New Roman"),
+        legend.position = "bottom",
+        panel.border = element_rect(colour = 1, fill = "transparent", size = 1),
+        panel.background = element_rect(colour = NA, fill = "white"))
+
+ggsave("teste_t_2_amostra_atividade_2_thiago.png", height = 10, width = 12)
+```
+
